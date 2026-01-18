@@ -32,8 +32,40 @@ namespace infini
         // =================================== 作业 ===================================
         // TODO: 设计一个算法来分配内存，返回起始地址偏移量
         // =================================== 作业 ===================================
+        auto it = freeBlocks.begin();
 
-        return 0;
+        while (it != freeBlocks.end()) {
+            if (it->second >= size) {
+                size_t addr = it->first;
+
+                if (it->second == size) {
+                    // Properly fit
+                    freeBlocks.erase(it);
+                } else {
+                    // Split free block
+                    freeBlocks[addr + size] = it->second - size;
+                    freeBlocks.erase(it);
+                }
+
+                used += size;
+                if (used > peak) {
+                    peak = used;
+                }
+
+                return addr;
+            }
+            ++it;
+        }
+
+        // No suitable free block
+        size_t addr = used;     // new memory used at the end
+        used += size;
+        
+        if (used > peak) {
+            peak = used;
+        }
+
+        return addr;
     }
 
     void Allocator::free(size_t addr, size_t size)
@@ -44,6 +76,34 @@ namespace infini
         // =================================== 作业 ===================================
         // TODO: 设计一个算法来回收内存
         // =================================== 作业 ===================================
+        used -= size;
+
+        // previous free block
+        auto prevIt = freeBlocks.upper_bound(addr);
+        if (prevIt != freeBlocks.begin()) {
+            prevIt--;
+        } else {
+            prevIt = freeBlocks.end();
+        }
+
+        // next free block
+        auto nextIt = freeBlocks.find(addr + size);
+
+        size_t newAddr = addr;
+        size_t newSize = size;
+
+        if (prevIt != freeBlocks.end() && prevIt->first + prevIt->second == addr) {
+            newAddr = prevIt->first;
+            newSize += prevIt->second;
+            freeBlocks.erase(prevIt);
+        }
+
+        if (nextIt != freeBlocks.end()) {
+            newSize += nextIt->second;
+            freeBlocks.erase(nextIt);
+        }
+
+        freeBlocks[newAddr] = newSize;
     }
 
     void *Allocator::getPtr()
