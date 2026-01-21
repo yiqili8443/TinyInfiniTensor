@@ -2,6 +2,8 @@
 #include "core/allocator.h"
 #include "core/operator.h"
 #include "core/tensor.h"
+#include "operators/transpose.h"
+#include "operators/matmul.h"
 #include <algorithm>
 #include <cstdint>
 
@@ -56,6 +58,15 @@ namespace infini
         void shape_infer();
 
         void dataMalloc();
+        
+        // self-defined
+        void eliminateRedundantTransposes();
+        bool isInversePermutation(const vector<int> &perm1, const vector<int> &perm2);
+        void eliminateTransposePair(Operator op1, Operator op2);
+        void fuseTransposeIntoMatmul();
+        void fuseTransposeWithMatmul(Ref<MatmulObj> matmulOp, int inputIdx, Ref<TransposeObj> transposeOp);
+        bool isLastTwoDimsSwap(const vector<int>& permute);
+        void cleanupWeakReferences();
 
         /**
          * @brief Add an operator and create its outputs. Output tensor arguments
