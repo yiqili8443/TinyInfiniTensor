@@ -640,15 +640,53 @@ namespace infini
         // HINT: 获取分配好的内存指针后，可以调用 tensor 的 setDataBlob 函数给 tensor 绑定内存
         // =================================== 作业 ===================================
         
-        for (auto &tensor : tensors) {
-            size_t bytes = tensor->getBytes();
-            // allocate memory using allocator
-            size_t offset = allocator.alloc(bytes);
-            // actual memory allocation
-            void *ptr = static_cast<char *>(allocator.getPtr()) + offset;
-
-            // set data blob to tensor
-            tensor->setDataBlob(make_ref<BlobObj>(runtime, ptr));
+        // 第一阶段：只计算偏移量，不实际分配内存
+    
+        // 1. 为所有输出tensor计算偏移量
+        std::vector<std::pair<Tensor, size_t>> outputAllocations;
+        for (const auto &op : ops) {
+            for (const auto &output : op->getOutputs()) {
+                if (output) {
+                    size_t size = output->getBytes();
+                    if (size > 0) {
+                        size_t offset = allocator.alloc(size);
+                        outputAllocations.emplace_back(output, offset);
+                    }
+                }
+            }
+        }
+        
+        // 2. 为所有输入tensor计算偏移量
+        std::vector<std::pair<Tensor, size_t>> inputAllocations;
+        for (const auto &tensor : tensors) {
+            // 跳过中间tensor（有source的tensor）
+            if (tensor && !tensor->getSource()) {
+                size_t size = tensor->getBytes();
+                if (size > 0) {
+                    size_t offset = allocator.alloc(size);
+                    inputAllocations.emplace_back(tensor, offset);
+                }
+            }
+        }
+        
+        // 第二阶段：实际分配内存
+        void* basePtr = allocator.getPtr();
+        IT_ASSERT(basePtr != nullptr, "Base pointer is null after allocation");
+        
+        // 第三阶段：设置tensor的内存指针
+        
+        // 3. 设置输出tensor的内存
+        for (const auto& [tensor, offset] : outputAllocations) {
+            void* actualPtr = static_cast<char*>(basePtr) + offset;
+            Blob blob = make_ref<BlobObj>(runtime, actualPtr);
+            tensor->setDataBlob(blob);
+        }
+        
+        // 4. 设置输入tensor的内存
+        for (const auto& [tensor, offset] : inputAllocations) {
+            void* actualPtr = static_cast<char*>(basePtr) + offset;
+            Blob blob = make_ref<BlobObj>(runtime, actualPtr);
+            tensor->setDataBlob(blob);
         }
 
         allocator.info();
